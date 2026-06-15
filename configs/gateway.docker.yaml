@@ -1,0 +1,8 @@
+# Container-world copy of configs/gateway.yaml.
+# Only differences vs configs/gateway.yaml:
+#   - listen binds 0.0.0.0 (compose publishes 8080:8080)
+#   - database.url uses service name `postgres` (compose DNS)
+listen: 0.0.0.0:8080
+
+database:
+  url: postgres://regime:regime@postgres:5432/regime?sslmode=disable

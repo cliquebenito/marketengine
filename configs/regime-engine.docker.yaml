@@ -1,0 +1,39 @@
+model_version: engine_v1.3.0_heuristic
+
+assets: [BTC, ETH]
+
+database:
+  url: postgres://regime:regime@postgres:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: "24h"
+
+feature_coverage_policy:
+  min_coverage: 0.6
+
+aggregation:
+  weights:
+    LIQUIDITY:         0.25
+    LEVERAGE:          0.20
+    MARKET_STRESS:     0.20
+    CAPITAL_FLOWS:     0.20
+    VOLATILITY_REGIME: 0.15
+
+probability_mapping:
+  sigmoid_slope_k: 1.5
+
+transition_risk:
+  roc_window_days: 14
+  roc_weight: 0.7
+  divergence_weight: 0.3
+  # v1.2.0: subtract this empirical baseline from the raw weighted-tanh sum so
+  # "normal market noise" maps to ~0 transition_risk; then rescale to [0,1].
+  # v1.1.0 without a baseline saturated around 0.77 mean on live BTC data.
+  baseline: 0.20
+
+# EMA smoothing of regime_indicator and transition_risk before persistence.
+# Reduces flip-flop rate of discrete regime labels near classifier thresholds.
+# span_days = 0 or 1 disables smoothing. Default 21 chosen to match the
+# -smooth value used in the 2026-04-21 backtest harness validation.
+smoothing:
+  span_days: 21

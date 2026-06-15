@@ -1,0 +1,329 @@
+# Полный стек market-engine в одной кнопке.
+#
+# Профили:
+#   default   — postgres + gateway (read-path running)
+#   init      — миграции goose (один раз перед первым `up`)
+#   ingest    — orchestrator: ежедневный прогон ingest+score (one-shot)
+#   domains   — отдельные доменные сервисы (если хочешь крутить по одному, не через orchestrator)
+#   regime    — regime-engine: пересчёт агрегации режимов на range дат
+#   backtest  — backtest-runner + backtest-metrics (one-shot)
+#
+# Быстрый старт (сделает всё):
+#   make stack                # эквивалент: make migrate → make up → make ingest → make regime
+#   make backtest FROM=2023-01-01 TO=2026-04-25
+#
+# Или вручную:
+#   docker compose -f deploy/docker-compose.yml --profile init   run --rm migrate
+#   docker compose -f deploy/docker-compose.yml                  up -d         # postgres + gateway
+#   docker compose -f deploy/docker-compose.yml --profile ingest run --rm orchestrator
+#   docker compose -f deploy/docker-compose.yml --profile regime run --rm regime-engine
+#   docker compose -f deploy/docker-compose.yml --profile backtest run --rm backtest-runner -from 2023-01-01 -to 2026-04-25 -mode replay
+services:
+  postgres:
+    image: timescale/timescaledb:2.14.2-pg16
+    environment:
+      POSTGRES_USER: regime
+      POSTGRES_PASSWORD: regime
+      POSTGRES_DB: regime
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U regime -d regime"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # ============================================================
+  # Read-path: gateway. Запускается всегда (`docker compose up`).
+  # ============================================================
+  gateway:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: gateway
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/gateway.docker.yaml"]
+    restart: unless-stopped
+
+  # ============================================================
+  # Init: goose миграции. Профиль "init", один раз перед `up`.
+  # ============================================================
+  migrate:
+    profiles: ["init"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: migrate
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - "-dsn"
+      - "postgres://regime:regime@postgres:5432/regime?sslmode=disable"
+      - "-dir"
+      - "/app/migrations"
+    restart: "no"
+
+  # ============================================================
+  # Ingest: orchestrator. Профиль "ingest", one-shot — запускается
+  # хост-cron'ом или вручную через `make ingest`.
+  # ============================================================
+  orchestrator:
+    profiles: ["ingest"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: orchestrator
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/orchestrator.docker.yaml"]
+    restart: "no"
+
+  # ============================================================
+  # Orchestrator daemon: long-running, тикает каждые 4 часа
+  # (configs/orchestrator.docker.yaml: schedule.tick_every).
+  # Запускается профилем "demo" через `make demo`.
+  # ============================================================
+  orchestrator-daemon:
+    profiles: ["demo"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: orchestrator
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/orchestrator.docker.yaml", "-daemon"]
+    restart: unless-stopped
+
+  # ============================================================
+  # Domain services. Профиль "domains" — нужны, если
+  # хочешь запускать домены по одному, минуя orchestrator
+  # (например, для отладки). По умолчанию НЕ стартуют.
+  # ============================================================
+  liquidity:
+    profiles: ["domains"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: liquidity-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/liquidity.docker.yaml"]
+    restart: "no"
+
+  leverage:
+    profiles: ["domains"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: leverage-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/leverage.docker.yaml"]
+    restart: "no"
+
+  market-stress:
+    profiles: ["domains"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: market-stress-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/market-stress.docker.yaml"]
+    restart: "no"
+
+  capital-flows:
+    profiles: ["domains"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: capital-flows-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/capital-flows.docker.yaml"]
+    restart: "no"
+
+  volatility:
+    profiles: ["domains"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: volatility-service
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/volatility.docker.yaml"]
+    restart: "no"
+
+  # ============================================================
+  # Regime: пересчёт агрегации регайма. Профиль "regime",
+  # one-shot — запускается после ingest.
+  # ============================================================
+  regime-engine:
+    profiles: ["regime"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: regime-engine
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/regime-engine.docker.yaml"]
+    restart: "no"
+
+  # Regime engine daemon: long-running, тикает каждые 24 часа
+  # (configs/regime-engine.docker.yaml: schedule.tick_every).
+  regime-engine-daemon:
+    profiles: ["demo"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: regime-engine
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../configs:/configs:ro
+    command: ["-config", "/configs/regime-engine.docker.yaml", "-daemon"]
+    restart: unless-stopped
+
+  # ============================================================
+  # Web UI (профиль "demo"). Собирает фронт `web/` и отдаёт через
+  # nginx на порту 4173. Дёргает gateway по http://gateway:8080.
+  # ============================================================
+  web:
+    profiles: ["demo"]
+    build:
+      context: ../web
+      dockerfile: ../deploy/Dockerfile.web
+    depends_on:
+      - gateway
+    ports:
+      - "4173:80"
+    restart: unless-stopped
+
+  # ============================================================
+  # Backtest: replay/sensitivity sweep. Профиль "backtest", one-shot.
+  # Аргументы передаются через CLI (см. make backtest FROM=… TO=…).
+  # ============================================================
+  backtest-runner:
+    profiles: ["backtest"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: backtest-runner
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../configs:/configs:ro
+    # Конкретные флаги (-from, -to, -mode, -sweep) подаются на лету через
+    # `docker compose run backtest-runner <flags>`. Дефолт ниже — replay
+    # последних 30 дней.
+    entrypoint: ["/app/service", "-config", "/configs/regime-engine.docker.yaml"]
+    restart: "no"
+
+  backtest-metrics:
+    profiles: ["backtest"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: backtest-metrics
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../configs:/configs:ro
+    entrypoint: ["/app/service"]
+    restart: "no"
+
+  # ============================================================
+  # Ingest mcap (CoinGlass market-data-history). Профиль "ingest-mcap",
+  # запускается отдельно, обычно один раз для backfill.
+  # ============================================================
+  ingest-mcap:
+    profiles: ["ingest-mcap"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+      args:
+        SERVICE: ingest-mcap
+        GIT_SHA: ${GIT_SHA:-dev}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      COINGLASS_API_KEY: ${COINGLASS_API_KEY:-}
+    volumes:
+      - ../configs:/configs:ro
+    entrypoint: ["/app/service"]
+    restart: "no"
+
+volumes:
+  pgdata:

@@ -1,0 +1,44 @@
+domain: leverage
+model_version: leverage_v1.2.0
+
+assets: [BTC, ETH]
+
+providers:
+  binance:
+    base_url: https://fapi.binance.com
+    timeout_sec: 30
+  bybit:
+    base_url: https://api.bybit.com
+    timeout_sec: 30
+  okx:
+    base_url: https://www.okx.com
+    timeout_sec: 30
+  deribit:
+    base_url: https://www.deribit.com
+    timeout_sec: 30
+  coinglass:
+    api_key: ""
+    timeout_sec: 30
+
+features:
+  intermediate_version: leverage_int_v1.2.0
+  final_version: leverage_final_v1.2.0
+
+scoring:
+  score_version: leverage_v1.2.0
+  tanh_scale: 2.0
+  # Wave 1: добавлен компонент crowd_positioning (вес 0.15). Старые компоненты
+  # масштабированы ×0.85, чтобы сохранить ∑ = 1.0.
+  weights:
+    size: 0.255
+    funding: 0.1275
+    basis: 0.17
+    liq: 0.17
+    momentum: 0.1275
+    crowd_positioning: 0.15
+
+database:
+  url: postgres://regime:regime@localhost:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: 4h

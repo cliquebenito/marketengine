@@ -1,0 +1,34 @@
+domain: volatility
+model_version: volatility_v3.0.0
+
+assets: [BTC, ETH]
+
+# NOTE: Deribit DVOL history starts ~March 2021 for BTC, later for ETH.
+# BTC klines are read from raw_binance_klines (populated by Market Stress domain).
+providers:
+  deribit:
+    base_url: https://www.deribit.com
+    timeout_sec: 30
+  coinglass:
+    api_key: ""
+    timeout_sec: 30
+
+features:
+  # Wave 6: настоящий GEX через Deribit options chain + Black-Scholes gamma.
+  # Расширяет компонент options_cross_source 4-й фичей gex_net_dealer_zscore_90d.
+  intermediate_version: volatility_int_v3.0.0
+  final_version: volatility_final_v3.0.0
+
+scoring:
+  score_version: volatility_v2.0.0
+  tanh_scale: 2.0
+  weights:
+    fear_premium: 0.40   # was 0.30, absorbed portion of term_structure (skipped in v1)
+    tail_risk: 0.35      # was 0.25, absorbed portion of term_structure
+    vov: 0.25            # was 0.15, absorbed portion of term_structure
+
+database:
+  url: postgres://regime:regime@localhost:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: 4h

@@ -1,0 +1,22 @@
+# Domain display-name: "Holder Conviction". The domain_code CAPITAL_FLOWS is
+# retained in the DB for schema stability. Components: ETF + LTH (+ Miner stub).
+domain: capital_flows
+model_version: capital_flows_v1.2.0
+
+providers:
+  coinglass:
+    api_key: ""
+    timeout_sec: 30
+
+features:
+  # Wave 2: добавлены liquidity_flow фичи (stablecoin velocity, exchange balance,
+  # bitfinex margin skew). Bump до v3.0.0 → принудительный рескор.
+  # Wave 5: institutional positioning (ETF AUM + concentration HHI + dealer skew proxy).
+  intermediate_version: capflows_int_v3.2.0
+  final_version: capflows_final_v3.2.0
+
+database:
+  url: postgres://regime:regime@localhost:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: 4h

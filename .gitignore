@@ -1,0 +1,20 @@
+# Dependencies & build
+web/node_modules/
+web/dist/
+node_modules/
+bin/
+*.log
+
+# System
+.DS_Store
+.idea/
+.vscode/
+
+# Secrets & local config
+deploy/.env
+config.json
+*.local.yaml
+
+# Temp
+/tmp/
+*.tmp

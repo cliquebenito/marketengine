@@ -1,0 +1,40 @@
+domain: market_stress
+model_version: market_stress_v1.0.0
+
+assets: [BTC, ETH]
+
+providers:
+  binance:
+    base_url: https://api.binance.com
+    timeout_sec: 30
+  kraken:
+    base_url: https://api.kraken.com
+    timeout_sec: 30
+  coinbase:
+    base_url: https://api.exchange.coinbase.com
+    timeout_sec: 30
+  coinglass:
+    api_key: ""
+    timeout_sec: 30
+
+features:
+  # Wave 4: добавлен компонент microstructure (orderbook + futures/spot ratio).
+  intermediate_version: mstress_int_v2.0.0
+  final_version: mstress_final_v2.0.0
+  leverage_basis_version: leverage_int_v1.2.0
+
+scoring:
+  score_version: market_stress_v1.0.0
+  tanh_scale: 2.0
+  weights:
+    correlation: 0.24
+    peg: 0.20
+    coinbase: 0.12
+    basis_inversion: 0.24
+    microstructure: 0.20
+
+database:
+  url: postgres://regime:regime@localhost:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: 4h

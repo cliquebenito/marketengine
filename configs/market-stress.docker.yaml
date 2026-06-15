@@ -1,0 +1,38 @@
+domain: market_stress
+model_version: market_stress_v0.1.0
+
+assets: [BTC, ETH]
+
+providers:
+  binance:
+    base_url: https://api.binance.com
+    timeout_sec: 30
+  kraken:
+    base_url: https://api.kraken.com
+    timeout_sec: 30
+  coinbase:
+    base_url: https://api.exchange.coinbase.com
+    timeout_sec: 30
+  coinglass:
+    api_key: ""
+    timeout_sec: 30
+
+features:
+  intermediate_version: mstress_int_v1.0.0
+  final_version: mstress_final_v1.0.0
+  leverage_basis_version: leverage_int_v1.0.0
+
+scoring:
+  score_version: market_stress_v0.1.0
+  tanh_scale: 2.0
+  weights:
+    correlation: 0.30
+    peg: 0.25
+    coinbase: 0.15
+    basis_inversion: 0.30
+
+database:
+  url: postgres://regime:regime@postgres:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: 4h

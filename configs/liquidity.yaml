@@ -1,0 +1,88 @@
+domain: liquidity
+# v0.4: all three Liquidity components wired (stablecoin + netflow + DeFi TVL).
+# First full-coverage Liquidity score [-1, +1].
+model_version: liquidity_v0.4.0
+
+assets: [BTC, ETH]
+
+providers:
+  defillama:
+    base_url: https://stablecoins.llama.fi
+    timeout_sec: 30
+  defillama_tvl:
+    base_url: https://api.llama.fi
+    timeout_sec: 30
+  coinmetrics:
+    base_url: https://community-api.coinmetrics.io/v4
+    timeout_sec: 30
+
+features:
+  - name: stablecoin_supply_total
+    version: stablecoin_supply_total_v1.0.0
+    params: {}
+  - name: stablecoin_supply_usdt_usdc_dai
+    version: stablecoin_supply_major_v1.0.0
+    params: {}
+  - name: stablecoin_growth_30d
+    version: stablecoin_growth_30d_v1.0.0
+    params:
+      window_days: 30
+  - name: stablecoin_growth_zscore_90d
+    version: stablecoin_growth_zscore_90d_v1.0.0
+    params:
+      window_days: 90
+      min_observations: 30
+  - name: ssr
+    version: ssr_v1.1.0
+    params: {}
+  - name: ssr_percentile_rank_365d
+    version: ssr_percentile_rank_365d_v1.1.0
+    params:
+      window_days: 365
+      min_observations: 30
+  - name: exchange_netflow_7d
+    version: exchange_netflow_7d_v1.0.0
+    params:
+      window_days: 7
+  - name: exchange_netflow_zscore_180d
+    version: exchange_netflow_zscore_180d_v1.0.0
+    params:
+      window_days: 180
+      min_observations: 60
+  - name: defi_tvl_usd
+    version: defi_tvl_usd_v1.0.0
+    params:
+      chain: Ethereum
+  - name: defi_tvl_growth_30d
+    version: defi_tvl_growth_30d_v1.0.0
+    params:
+      window_days: 30
+  - name: defi_tvl_growth_zscore_180d
+    version: defi_tvl_growth_zscore_180d_v1.0.0
+    params:
+      window_days: 180
+      min_observations: 60
+
+scoring:
+  score_version: liquidity_v0.4.0
+  tanh_scale: 2.0
+  components:
+    # Heuristic weights from design/regime-engine.md §9. Sum = 1.0.
+    - name: component_stablecoin_capital
+      features: [stablecoin_growth_zscore_90d, ssr_percentile_rank_365d]
+      weight: 0.40
+      invert: false
+    - name: component_exchange_netflow
+      features: [exchange_netflow_zscore_180d]
+      weight: 0.35
+      invert: true
+    - name: component_defi_capital
+      features: [defi_tvl_growth_zscore_180d]
+      weight: 0.25
+      invert: false
+
+database:
+  url: postgres://regime:regime@localhost:5432/regime?sslmode=disable
+
+schedule:
+  tick_every: 4h

@@ -1,0 +1,87 @@
+# Container-world copy of configs/orchestrator.yaml.
+# Only difference: database.url uses service name `postgres` (compose DNS)
+# instead of `localhost`. Keep domain params, provider endpoints, model_versions
+# in sync with orchestrator.yaml.
+database:
+  url: postgres://regime:regime@postgres:5432/regime?sslmode=disable
+
+providers:
+  defillama:
+    base_url: https://stablecoins.llama.fi
+    timeout_sec: 30
+  defillama_tvl:
+    base_url: https://api.llama.fi
+    timeout_sec: 30
+  coinmetrics:
+    base_url: https://community-api.coinmetrics.io/v4
+    timeout_sec: 30
+  binance:
+    base_url: https://fapi.binance.com
+    timeout_sec: 30
+  binance_spot:
+    base_url: https://api.binance.com
+    timeout_sec: 30
+  bybit:
+    base_url: https://api.bybit.com
+    timeout_sec: 30
+  okx:
+    base_url: https://www.okx.com
+    timeout_sec: 30
+  deribit:
+    base_url: https://www.deribit.com
+    timeout_sec: 30
+  coinglass:
+    api_key: ""
+    timeout_sec: 30
+  kraken:
+    base_url: https://api.kraken.com
+    timeout_sec: 30
+  coinbase:
+    base_url: https://api.exchange.coinbase.com
+    timeout_sec: 30
+
+paths:
+  liquidity_config: /configs/liquidity.yaml
+
+domains:
+  liquidity:
+    model_version: liquidity_v0.4.0
+  leverage:
+    model_version: leverage_v0.1.0
+    intermediate_version: leverage_int_v1.0.0
+    final_version: leverage_final_v1.0.0
+  market_stress:
+    model_version: market_stress_v0.1.0
+    intermediate_version: mstress_int_v1.0.0
+    final_version: mstress_final_v1.0.0
+    leverage_basis_version: leverage_int_v1.0.0
+  capital_flows:
+    model_version: capital_flows_v0.2.0
+    intermediate_version: capflows_int_v2.0.0
+    final_version: capflows_final_v2.0.0
+  volatility:
+    model_version: volatility_v0.1.0
+    intermediate_version: volatility_int_v1.0.0
+    final_version: volatility_final_v1.0.0
+  regime_engine:
+    model_version: engine_v1.3.0_heuristic
+    weights:
+      LIQUIDITY:         0.25
+      LEVERAGE:          0.20
+      MARKET_STRESS:     0.20
+      CAPITAL_FLOWS:     0.20
+      VOLATILITY_REGIME: 0.15
+    sigmoid_slope_k: 1.5
+    transition:
+      roc_window_days: 14
+      roc_weight: 0.7
+      divergence_weight: 0.3
+      baseline: 0.20
+    normalization:
+      lookback_days: 365
+      min_samples: 60
+    smoothing:
+      span_days: 21
+
+schedule:
+  tick_every: "4h"
